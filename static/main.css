@@ -1,0 +1,16 @@
+div.section {
+    font-family: 'Lato', sans-serif;
+}
+
+span.highlighted {
+    color: #000080;
+    font-weight: bold;
+}
+
+span.green {
+    color: green;
+}
+
+span.red {
+    color: red;
+}
