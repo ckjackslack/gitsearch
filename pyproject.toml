@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gitsearch"
+version = "0.2.0"
+description = "Search and query the commit history of a local git repository from the CLI, a JSON API or a small web UI."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "ckjackslack" }]
+dependencies = ["falcon>=3.1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+gitsearch = "gitsearch.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+gitsearch = ["web/static/*", "web/static/libs/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
