@@ -1,0 +1,14 @@
+[v-cloak] { display: none; }
+
+body, div.section {
+    font-family: 'Lato', system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+span.highlighted { color: #000080; font-weight: bold; }
+.green { color: #257942; }
+.red { color: #cc0f35; }
+
+.buttons-bottom { display: flex; align-items: flex-end; gap: .5rem; }
+.box.commit { padding: 1rem 1.25rem; }
+pre.message { white-space: pre-wrap; padding: .75rem; }
+.tag { cursor: pointer; }

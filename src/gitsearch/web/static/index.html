@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>gitsearch</title>
+    <link rel="stylesheet" href="/static/libs/bulma.min.css">
+    <link rel="stylesheet" href="/static/main.css">
+</head>
+<body>
+<section class="section" id="app" v-cloak>
+  <div class="container">
+    <h1 class="title">gitsearch</h1>
+    <p class="subtitle is-6" v-if="info">
+      <code>{{ info.repo }}</code> @ <code>{{ info.ref }}</code>
+      ({{ info.head ? info.head.slice(0, 7) : '' }}, {{ info.commits }} commits)
+    </p>
+
+    <div class="notification is-warning" v-if="needToken">
+      <p class="mb-2">This server requires an access token.</p>
+      <form class="field has-addons" @submit.prevent="saveToken">
+        <div class="control is-expanded"><input class="input" type="password" v-model="tokenInput" placeholder="token"></div>
+        <div class="control"><button class="button is-dark">Use token</button></div>
+      </form>
+    </div>
+
+    <div class="notification is-danger" v-if="error">
+      <button class="delete" @click="error = null"></button>{{ error }}
+    </div>
+
+    <div class="tabs">
+      <ul>
+        <li :class="{ 'is-active': tab === 'search' }"><a @click="tab = 'search'">Search</a></li>
+        <li :class="{ 'is-active': tab === 'sql' }"><a @click="tab = 'sql'">SQL</a></li>
+      </ul>
+    </div>
+
+    <!-- search tab -->
+    <div v-show="tab === 'search'">
+      <form @submit.prevent="search(1)">
+        <div class="columns is-multiline">
+          <div class="column is-3 field">
+            <label class="label">Author / email</label>
+            <input class="input" type="text" v-model="form.author">
+          </div>
+          <div class="column is-3 field">
+            <label class="label">Message or sha</label>
+            <input class="input" type="text" v-model="form.q">
+          </div>
+          <div class="column is-3 field">
+            <label class="label">File path</label>
+            <input class="input" type="text" v-model="form.path">
+          </div>
+          <div class="column is-3 field">
+            <label class="label">Merges</label>
+            <div class="select is-fullwidth">
+              <select v-model="form.merges">
+                <option value="">include</option>
+                <option value="no">exclude</option>
+                <option value="only">only merges</option>
+              </select>
+            </div>
+          </div>
+          <div class="column is-3 field">
+            <label class="label">Since</label>
+            <input class="input" type="date" v-model="form.since">
+          </div>
+          <div class="column is-3 field">
+            <label class="label">Until</label>
+            <input class="input" type="date" v-model="form.until">
+          </div>
+          <div class="column is-3 field">
+            <label class="label">Group by</label>
+            <div class="select is-fullwidth">
+              <select v-model="form.group_by">
+                <option value="">(no grouping)</option>
+                <option v-for="k in groupKeys" :value="k">{{ k }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="column is-3 field buttons-bottom">
+            <button class="button is-link" :class="{ 'is-loading': loading }">Search</button>
+            <button class="button" type="button" @click="reset">Reset</button>
+          </div>
+        </div>
+      </form>
+
+      <div v-if="groups">
+        <p class="mb-3">{{ groups.total }} matching commit(s) in {{ groups.groups.length }} group(s)</p>
+        <table class="table is-fullwidth is-striped is-narrow">
+          <thead><tr><th>{{ groups.group_by }}</th><th>commits</th><th>+</th><th>-</th></tr></thead>
+          <tbody>
+            <tr v-for="g in groups.groups" :key="g.key">
+              <td><a @click="drillDown(g.key)">{{ g.key }}</a></td>
+              <td>{{ g.count }}</td>
+              <td class="green">{{ g.insertions }}</td>
+              <td class="red">{{ g.deletions }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-else-if="result">
+        <p class="mb-3">{{ result.total }} matching commit(s)</p>
+        <div v-if="result.commits.length">
+          <div v-for="c in result.commits" :key="c.sha" class="box commit">
+            <p class="is-clickable" @click="toggle(c.sha)">
+              <code>{{ c.short_sha }}</code>
+              <strong>{{ c.subject }}</strong>
+              <span class="tag is-light" v-if="c.is_merge">merge</span>
+              <br>
+              <small>{{ c.author }} &lt;{{ c.email }}&gt; &middot; {{ c.date }}
+                &middot; <span class="green">+{{ c.insertions }}</span> <span class="red">-{{ c.deletions }}</span>
+                &middot; {{ c.files.length }} file(s)</small>
+            </p>
+            <div v-if="open[c.sha]" class="mt-3">
+              <pre class="message">{{ c.message }}</pre>
+              <ul>
+                <li v-for="f in c.files" :key="f.path">
+                  <span class="highlighted">{{ f.path }}</span>
+                  <span v-if="f.insertions === null">(binary)</span>
+                  <span v-else>(<span class="green">+{{ f.insertions }}</span>, <span class="red">-{{ f.deletions }}</span>)</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <nav class="pagination is-centered" v-if="result.pages > 1">
+            <a class="pagination-previous" :disabled="result.page <= 1" @click="result.page > 1 && search(result.page - 1)">Previous</a>
+            <a class="pagination-next" :disabled="result.page >= result.pages" @click="result.page < result.pages && search(result.page + 1)">Next</a>
+            <ul class="pagination-list"><li><span class="pagination-ellipsis">page {{ result.page }} / {{ result.pages }}</span></li></ul>
+          </nav>
+        </div>
+        <p v-else>No commits found.</p>
+      </div>
+    </div>
+
+    <!-- sql tab -->
+    <div v-show="tab === 'sql'">
+      <div class="content is-small" v-if="info">
+        <p>
+          Tables:
+          <span v-for="(cols, name) in info.tables" :key="name" class="mr-3">
+            <code>{{ name }}</code>({{ cols.join(', ') }})
+          </span>
+        </p>
+        <p>Examples:
+          <a v-for="ex in examples" :key="ex" class="tag is-light mr-1" @click="sql = ex">{{ ex }}</a>
+        </p>
+      </div>
+      <form @submit.prevent="runSql">
+        <div class="field">
+          <textarea class="textarea is-family-monospace" rows="4" v-model="sql"
+                    @keydown.ctrl.enter.prevent="runSql"></textarea>
+        </div>
+        <button class="button is-link mb-4" :class="{ 'is-loading': loading }">Run (Ctrl+Enter)</button>
+      </form>
+      <div v-if="sqlResult" class="table-container">
+        <table class="table is-fullwidth is-striped is-narrow">
+          <thead><tr><th v-for="col in sqlResult.columns" :key="col">{{ col }}</th></tr></thead>
+          <tbody>
+            <tr v-for="(row, i) in sqlResult.rows" :key="i"><td v-for="(v, j) in row" :key="j">{{ v === null ? 'NULL' : v }}</td></tr>
+          </tbody>
+        </table>
+        <p>{{ sqlResult.rows.length }} row(s)<span v-if="sqlResult.truncated"> (truncated)</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+<script src="/static/libs/vue.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
